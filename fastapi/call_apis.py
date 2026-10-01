@@ -40,11 +40,9 @@ def read_upload_data(url, params, file_name):
     # write to bucket
     file.upload_from_string(json.dumps(data))
 
-    # TODO: return?
-
 # default message
 def default():
-    return {"message": "Please give a source to pull from: (earthquake, rest are not implemented"}
+    return {"message": "Please give a source to pull from: (earthquake), rest are not implemented yet"}
 
 # use for getting earthquake data
 def call_earthquake():
@@ -61,7 +59,10 @@ def call_earthquake():
         "maxlongitude": -114.1,
     }
 
-    read_upload_data(earthquake_url, params, "earthquake_data")
+    try: 
+        read_upload_data(earthquake_url, params, "earthquake_data")
+    except Exception as e:
+        return e
 
     return "earthquake data uploaded to bucket!"
 
