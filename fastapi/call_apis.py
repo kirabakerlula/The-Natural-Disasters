@@ -12,7 +12,7 @@ import json
 load_dotenv()
 
 # GCS related:
-service_account_key = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+service_account_key = os.getenv("GCP_SERVICE_ACCOUNT_KEY")
 project_id = os.getenv("GCP_PROJECT_ID")
 bucket_name = os.getenv("GCS_BUCKET")
 
