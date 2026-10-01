@@ -1,0 +1,7 @@
+earthquake_id,date,year_month,place,magnitude,latitude,longitude,depth
+tx2025cbgl,2025-01-30,2025-01,"18 km ENE of Falls City, Texas",4.6,29.058,-97.846,6.8365
+us6000pmkg,2025-01-27,2025-01,"26 km NW of Clayton, Idaho",4.2,44.4068,-114.6681,9.19
+nc75123321,2025-01-26,2025-01,"56 km WNW of Petrolia, CA",4.13,40.3348333333333,-124.942833333333,7.04
+ci41034376,2025-01-23,2025-01,"18 km W of Delta, B.C., MX",4.37,32.3291667,-115.3858333,14.74
+tx2025aoxt,2025-01-09,2025-01,"56 km S of Whites City, New Mexico",4.2,31.666,-104.357,5.946
+nc75111126,2025-01-02,2025-01,"4 km NW of Cobb, CA",4.65,38.8455,-122.756333333333,1.42
