@@ -24,6 +24,16 @@ START_YEAR = 2016
 INCIDENT_TYPES = ["Earthquake", "Fire"]
 PAGE_SIZE = 1000  # OpenFEMA's max records per request
 
+# FEMA lists these reservations with county code "000" (no county).
+# Each one sits inside a real county, so we map them by name.
+TRIBAL_AREA_COUNTY = {
+    "Hopland Rancheria (Indian Reservation)": "06045",      # Mendocino County
+    "Morongo Indian Reservation": "06065",                  # Riverside County
+    "Rohnerville Rancheria (Indian Reservation)": "06023",  # Humboldt County
+}
+
+
+
 RAW_DIR = Path("data/raw/fema")
 PROCESSED_DIR = Path("data/processed")
 
@@ -92,10 +102,23 @@ def clean(records: list[dict], start_year: int = START_YEAR) -> pd.DataFrame:
 
     # 5-digit county FIPS (state 2 + county 3), e.g. "06037" = Los Angeles County.
     # County code "000" means a tribal area or statewide row, not a real county,
-    # so we leave county_fips empty there to avoid bad joins with Census data.
     state = df["fipsStateCode"].astype(str).str.zfill(2)
     county = df["fipsCountyCode"].astype(str).str.zfill(3)
     df["county_fips"] = (state + county).where(county != "000")
+
+ # Rows with county code "000" are tribal areas (or statewide). Flag them,
+    # then fill in the county they sit in so they don't drop out of joins.
+    df["is_tribal_area"] = df["county_fips"].isna()
+    df["county_fips"] = df["county_fips"].fillna(df["designatedArea"].map(TRIBAL_AREA_COUNTY))
+
+    still_missing = df["county_fips"].isna().sum()
+    if still_missing:
+        logger.warning(
+            "%d rows still have no county FIPS: %s",
+            still_missing,
+            df.loc[df["county_fips"].isna(), "designatedArea"].unique().tolist(),
+        )
+
 
     return df.sort_values("declarationDate").reset_index(drop=True)
 
