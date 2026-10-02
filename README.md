@@ -22,10 +22,10 @@ DSAI-692 Data Acquisitions Group Projet
 - 
 
 ### Sources
-| 1 | [FEMA](https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries) | API | Fema event id, type, name, state, dates, location | Dynamic Updates | Free Key |
-| 2 | [Cal Fire](https://exact-url) | API | Wildire Data in CA | Dynamic Updates | No Key Needed |
-| 3 | [US Census](https://data.census.gov) | API | Demographic Data | Yearly | Free Key |
-| 4 | [USGS] (https://earthquake.usgs.gov/earthquakes/search/) | API | Earthquake Data | Dynamic Updates | Free Key, 1000 calls per hour |
+| 1 | [FEMA](https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries) | API | Fema event id, type, name, state, dates, location | Dynamic Updates | Free Key |\
+| 2 | [Cal Fire](https://exact-url) | API | Wildire Data in CA | Dynamic Updates | No Key Needed |\
+| 3 | [US Census](https://data.census.gov) | API | Demographic Data | Yearly | Free Key |\
+| 4 | [USGS] (https://earthquake.usgs.gov/earthquakes/search/) | API | Earthquake Data | Dynamic Updates | Free Key, 1000 calls per hour |\
 
 
 ### Integration Goal
