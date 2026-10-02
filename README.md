@@ -42,14 +42,14 @@ DSAI-692 Data Acquisitions Group Projet
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/ORG/REPO.git
-cd REPO
+git clone https://github.com/ORG/The-Natural-Disasters.git
+cd The-Natural-Disasters
 ```
 
 ### 2. Configure environment variables
 Copy the example file and fill in your own values:
 CENSUS_API_KEY=
-GCS_SERVICE_ACCOUNT_KEY
+GCS_SERVICE_ACCOUNT_KEY=
 GCS_BUCKET=
 GCP_PROJECT_ID=
 FEMA_URL=
@@ -62,17 +62,18 @@ cp .env_template .env
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `GCP_SERVICE_ACCOUNT_KEY` | Absolute path to your service account JSON | `/Users/you/.ssh/key.json` |
-| `GCS_BUCKET` | Name of your designated GCS bucket | `BUCKET_123` |
-| `GCP_PROJECT_ID` | Project ID tied to your GCS | `PROJECTID_123` |
-| `FEMA_URL` | FEMA API key | `df3kj3002......` |
-| `USGS_EARTHQUAKE_BASE_URL` | USGS Earthquake API Key | `39jr24ooire.....` |
-| `CAL_FIRE_URL` | Cal Fire API Key | `jowljfe8w90u94.....` |
+| 'CENSUS_API_KEY' | US Census API Key | 'bdjpofj039j.....' |\
+| `GCP_SERVICE_ACCOUNT_KEY` | Absolute path to your service account JSON | `/Users/you/.ssh/key.json` |\
+| `GCS_BUCKET` | Name of your designated GCS bucket | `BUCKET_123` |\
+| `GCP_PROJECT_ID` | Project ID tied to your GCS | `PROJECTID_123` |\
+| `FEMA_URL` | FEMA API key | `df3kj3002......` |\
+| `USGS_EARTHQUAKE_BASE_URL` | USGS Earthquake API Key | `39jr24ooire.....` |\
+| `CAL_FIRE_URL` | Cal Fire API Key | `jowljfe8w90u94.....` |\
 
-### 4. How to call your endpoint
+### 3. How to call your endpoint
 To start the API server,
 ```
-fastapi run collect_store_data.py
+fastapi run fastapi/collect_store_data.py
 ```
 
 ```python
