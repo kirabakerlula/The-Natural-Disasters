@@ -1,0 +1,60 @@
+GEO_ID,FIPS,Name,Est_per_capita_income,MOE_per_capita_income
+0400000US06,06,California,49513,168
+0500000US06001,06001,"Alameda County, California",65862,642
+0500000US06003,06003,"Alpine County, California",49426,12953
+0500000US06005,06005,"Amador County, California",44320,2456
+0500000US06007,06007,"Butte County, California",38305,999
+0500000US06009,06009,"Calaveras County, California",43512,2389
+0500000US06011,06011,"Colusa County, California",33882,2882
+0500000US06013,06013,"Contra Costa County, California",62927,732
+0500000US06015,06015,"Del Norte County, California",31028,1826
+0500000US06017,06017,"El Dorado County, California",59958,1696
+0500000US06019,06019,"Fresno County, California",32963,519
+0500000US06021,06021,"Glenn County, California",30361,1886
+0500000US06023,06023,"Humboldt County, California",36080,1389
+0500000US06025,06025,"Imperial County, California",23552,784
+0500000US06027,06027,"Inyo County, California",41767,2146
+0500000US06029,06029,"Kern County, California",29699,507
+0500000US06031,06031,"Kings County, California",27306,766
+0500000US06033,06033,"Lake County, California",35372,1814
+0500000US06035,06035,"Lassen County, California",26634,1287
+0500000US06037,06037,"Los Angeles County, California",45792,239
+0500000US06039,06039,"Madera County, California",30077,1310
+0500000US06041,06041,"Marin County, California",93920,2414
+0500000US06043,06043,"Mariposa County, California",41417,2730
+0500000US06045,06045,"Mendocino County, California",38760,1386
+0500000US06047,06047,"Merced County, California",28030,830
+0500000US06049,06049,"Modoc County, California",32252,3229
+0500000US06051,06051,"Mono County, California",54872,6835
+0500000US06053,06053,"Monterey County, California",40422,856
+0500000US06055,06055,"Napa County, California",61040,3428
+0500000US06057,06057,"Nevada County, California",53364,2088
+0500000US06059,06059,"Orange County, California",54557,475
+0500000US06061,06061,"Placer County, California",57862,1137
+0500000US06063,06063,"Plumas County, California",43235,3857
+0500000US06065,06065,"Riverside County, California",38317,298
+0500000US06067,06067,"Sacramento County, California",43324,430
+0500000US06069,06069,"San Benito County, California",45103,1369
+0500000US06071,06071,"San Bernardino County, California",34343,376
+0500000US06073,06073,"San Diego County, California",51976,362
+0500000US06075,06075,"San Francisco County, California",92289,1250
+0500000US06077,06077,"San Joaquin County, California",37266,579
+0500000US06079,06079,"San Luis Obispo County, California",51592,2178
+0500000US06081,06081,"San Mateo County, California",84288,1230
+0500000US06083,06083,"Santa Barbara County, California",48028,926
+0500000US06085,06085,"Santa Clara County, California",80312,714
+0500000US06087,06087,"Santa Cruz County, California",56941,1210
+0500000US06089,06089,"Shasta County, California",39574,1351
+0500000US06091,06091,"Sierra County, California",37843,7079
+0500000US06093,06093,"Siskiyou County, California",36529,1787
+0500000US06095,06095,"Solano County, California",45127,720
+0500000US06097,06097,"Sonoma County, California",56640,1078
+0500000US06099,06099,"Stanislaus County, California",34849,575
+0500000US06101,06101,"Sutter County, California",36107,2015
+0500000US06103,06103,"Tehama County, California",36168,5332
+0500000US06105,06105,"Trinity County, California",31301,3345
+0500000US06107,06107,"Tulare County, California",28185,459
+0500000US06109,06109,"Tuolumne County, California",44142,2387
+0500000US06111,06111,"Ventura County, California",49748,684
+0500000US06113,06113,"Yolo County, California",43733,1073
+0500000US06115,06115,"Yuba County, California",34585,1669
