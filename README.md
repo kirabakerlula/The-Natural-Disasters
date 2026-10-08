@@ -29,7 +29,7 @@ DSAI-692 Data Acquisitions Group Projet
 
 
 ### Integration Goal
-- Our goal is to be able to integrate by location, namely by county name. By themselves, each data source only tells one part of the story, whether it be demographic, earthquake, wildfire, or FEMA response. All together, these sources will be able to tell the complete story of what happened, who it happened to, and the effects.
+- Our goal is to be able to integrate by location, namely by county. By themselves, each data source only tells one part of the story, whether it be demographic, earthquake, wildfire, or FEMA response. All together, these sources will be able to tell the complete story of what happened, who it happened to, and the effects.
 
 ---
 
@@ -84,6 +84,26 @@ requests.get("http://localhost:8000/source/{source}")
 ## Repository Structure
 ```
 .
+├──demographics
+├── clean_census_data
+├──  hispanic_or_latino_origin_by_race.csv
+├──  median_household_income.csv
+├──  median_sex_by_age.csv
+├──  per_capita_income.csv
+├──  pop_household_income.csv
+├──  poverty_by_sex_age.csv
+├──  race.csv
+├──  sex_by_age.csv
+├── raw_census_data
+├──  B01001.csv
+├──  B01002.csv
+├──  B02001.csv
+├──  B03002.csv
+├──  B17001.csv
+├──  B19001.csv
+├──  B19013.csv
+├──  B19301.csv
+├── census_data_cleaning.py
 ├──exploration
 ├── fema_data_pull.ipynb
 ├──fastapi
