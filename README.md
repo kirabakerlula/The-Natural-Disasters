@@ -19,7 +19,6 @@ DSAI-692 Data Acquisitions Group Projet
 ---
 
 ## Data Sources and Integration Goal
-- 
 
 ### Sources
 | 1 | [FEMA](https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries) | API | Fema event id, type, name, state, dates, location | Dynamic Updates | Free Key |\
