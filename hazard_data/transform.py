@@ -14,6 +14,15 @@ Wildfires use the affected counties named by CAL FIRE, not its internal IDs or
 the incident's single coordinate. Multi-county fires count once per county;
 county counts therefore must not be summed to obtain statewide event counts.
 Zeros describe the supplied snapshot, not guaranteed historical coverage.
+
+Reading guide for API integration:
+    1. Start with transform_usgs() / transform_calfire() near the end of this file.
+    2. Use dataframe_records() to convert their DataFrames to JSON-safe records.
+    3. Read transform_raw_hazards() if both raw sources are available for a summary.
+    4. The earlier sections are the shared implementation used by those functions.
+
+Load the geographic reference with county_reference.load_county_reference().
+This module handles transformation only; callers handle HTTP, GCS, and scheduling.
 """
 
 import ast
@@ -26,8 +35,17 @@ from shapely.geometry import Point, shape
 from shapely.strtree import STRtree
 
 
+# SECTION 1: Result bundle returned when transforming both sources together.
 @dataclass
 class HazardTables:
+    """Five related tables, with different row meanings.
+
+    earthquakes: one row per retained earthquake, including unassigned events.
+    wildfire_events: one row per retained fire, including unassigned events.
+    wildfire_counties: one row per fire/matched county, for county aggregation.
+    county_summary: one row per reference county, ready for a Census FIPS join.
+    issues: audit rows describing rejected values, exclusions, or missing matches.
+    """
     earthquakes: pd.DataFrame
     wildfire_events: pd.DataFrame
     wildfire_counties: pd.DataFrame
@@ -35,7 +53,10 @@ class HazardTables:
     issues: pd.DataFrame
 
 
+# SECTION 2: County lookup and validation helpers, shared by both sources.
+# The reference contains geographic boundaries/FIPS, not Census demographics.
 def _county_name(value: str) -> str:
+    """Normalize county labels so suffixes, spaces, and case do not break joins."""
     return " ".join(value.removesuffix(" County, California").removesuffix(" County").split()).casefold()
 
 
@@ -70,6 +91,7 @@ class CountyIndex:
         """Return one county or an explicit reason why assignment failed."""
         if not _valid_coordinates(latitude, longitude):
             return None, "invalid_coordinates"
+        # A spatial index finds county polygons covering the earthquake epicenter.
         matches = self.tree.query(Point(float(longitude), float(latitude)), predicate="covered_by")
         if len(matches) == 0:
             return None, "outside_county_boundaries"
@@ -88,6 +110,7 @@ def _valid_coordinates(latitude, longitude):
 
 
 def _parse_counties(value):
+    """Accept raw lists or old CSV list strings; remove repeated county names."""
     if isinstance(value, (list, tuple)):
         names = list(value)
     elif value is None or (isinstance(value, float) and math.isnan(value)):
@@ -109,6 +132,8 @@ def _parse_counties(value):
     return list(dict.fromkeys(name.strip() for name in names))
 
 
+# SECTION 3: Shared transformation engine. Input is normalized collector tables.
+# API callers normally use the raw-JSON entry points in Section 5 instead.
 def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
                       county_geojson: dict, *, start_date="2016-01-01",
                       end_date=None, min_magnitude=4.0) -> HazardTables:
@@ -121,6 +146,7 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
     in event tables, but do not enter county aggregates. Successful, complete
     collector snapshots must be passed; collection failures must raise upstream.
     """
+    # 3a. Build the county lookup and validate the requested UTC date window.
     index = CountyIndex(county_geojson)
     issues = []
     start = pd.to_datetime(start_date, utc=True)
@@ -140,6 +166,7 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
                        "issue": reason, "detail": str(detail)})
 
     def clean(frame, source, id_column, required):
+        """Shared cleaning: required fields, IDs, last-record deduplication, dates."""
         if not frame.columns.is_unique:
             raise ValueError(f"{source} has duplicate column names")
         reserved = {"county_fips", "county_name", "county_match_status", "matched_county_count"}
@@ -171,9 +198,11 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
         frame["year_month"] = days.loc[in_period].dt.strftime("%Y-%m")
         return frame.reset_index(drop=True)
 
+    # 3b. Clean earthquake IDs/dates; coerce numeric fields and audit bad values.
     eq = clean(earthquakes, "usgs", "earthquake_id",
                ["earthquake_id", "date", "latitude", "longitude", "magnitude"])
     def numeric_fields(frame, source, id_column, limits):
+        """Convert numbers; replace invalid/out-of-range values with missing values."""
         for column, (minimum, maximum) in limits.items():
             if column not in frame:
                 continue
@@ -197,6 +226,7 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
     for event_id in eq.loc[magnitude_valid & eq["magnitude"].lt(min_magnitude), "earthquake_id"]:
         issue("usgs", event_id, "below_minimum_magnitude")
     eq = eq.loc[magnitude_valid & eq["magnitude"].ge(min_magnitude)].copy()
+    # 3c. Assign earthquake FIPS from coordinates. Keep unmatched events for audit.
     assignments = []
     for row in eq.to_dict("records"):
         county, status = index.locate(row["latitude"], row["longitude"])
@@ -209,6 +239,8 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
     for column in ["county_fips", "county_name", "county_match_status"]:
         eq[column] = pd.Series([a[column] for a in assignments], dtype="string")
 
+    # 3d. Clean fires and map every affected county name to its official FIPS.
+    # CountyIds are CAL FIRE's internal identifiers and are never used as FIPS.
     fires = clean(wildfires, "calfire", "fire_id", ["fire_id", "date", "counties"])
     numeric_fields(fires, "calfire", "fire_id", {
         "latitude": (-90, 90), "longitude": (-180, 180),
@@ -241,6 +273,7 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
         statuses.append("partially_matched" if matched and unknown else
                         "matched" if matched else "unassigned")
         county_counts.append(len(matched))
+        # One incident can affect several counties; retain its identity in each row.
         for county in matched.values():
             expanded.append({**row, **county})
     fires["county_match_status"] = pd.Series(statuses, dtype="string")
@@ -249,6 +282,8 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
         *([] if "year_month" in wildfires.columns else ["year_month"]),
         "county_fips", "county_name"])
 
+    # 3e. Count unique events per county, then join the two aggregates by FIPS.
+    # Keep every reference county. No matched earthquake means null max magnitude.
     summary = pd.DataFrame(index.counties).sort_values("county_fips").reset_index(drop=True)
     assigned = eq.loc[eq["county_fips"].notna()]
     eq_stats = assigned.groupby("county_fips", as_index=False).agg(
@@ -264,6 +299,8 @@ def transform_hazards(earthquakes: pd.DataFrame, wildfires: pd.DataFrame,
                         pd.DataFrame(issues, columns=["source", "event_id", "issue", "detail"]))
 
 
+# SECTION 4: Raw source adapters. Validate JSON shape and standardize field names.
+# These adapters extract records; Section 3 performs cleaning and county matching.
 _USGS_COLUMNS = ["earthquake_id", "date", "place", "magnitude", "latitude", "longitude", "depth"]
 _CALFIRE_FIELDS = {
     "fire_id": "UniqueId", "date": "Started", "name": "Name",
@@ -274,6 +311,7 @@ _CALFIRE_FIELDS = {
 
 
 def _usgs_records(raw_data):
+    """Extract USGS features; read [longitude, latitude, depth] and epoch milliseconds."""
     if (not isinstance(raw_data, dict) or raw_data.get("type") != "FeatureCollection"
             or "error" in raw_data or not isinstance(raw_data.get("features"), list)):
         raise ValueError("USGS response must be a successful GeoJSON FeatureCollection with features")
@@ -313,6 +351,7 @@ def _usgs_records(raw_data):
 
 
 def _calfire_records(raw_data):
+    """Rename CAL FIRE fields from an Incidents response or combined incident list."""
     if isinstance(raw_data, dict):
         if "error" in raw_data or "Incidents" not in raw_data:
             raise ValueError("CAL FIRE response must contain a successful Incidents list")
@@ -325,6 +364,7 @@ def _calfire_records(raw_data):
                          for item in incidents], columns=list(_CALFIRE_FIELDS))
 
 
+# SECTION 5: Public entry points for API integration. Start reading here.
 def transform_raw_hazards(usgs_raw: dict, calfire_raw, county_geojson: dict, *,
                           start_date="2016-01-01", end_date=None,
                           min_magnitude=4.0) -> HazardTables:
@@ -353,6 +393,8 @@ def transform_usgs(raw_data: dict, county_geojson: dict, *, start_date="2016-01-
     defaults to >=4.0. attrs['issues'] lists dropped/invalid/unassigned records.
     These enriched rows must not be passed to transform_hazards() again.
     """
+    # Reuse the shared engine with an empty fire input; return only earthquake rows.
+    # The temporary fire counts are not a collected dataset and are not returned.
     tables = transform_raw_hazards(raw_data, {"Incidents": []}, county_geojson,
                                   start_date=start_date, end_date=end_date,
                                   min_magnitude=min_magnitude)
@@ -375,10 +417,12 @@ def transform_calfire(raw_data, county_geojson: dict, *, start_date="2016-01-01"
     attrs['issues'] contains audit records. Use dataframe_records() for JSON;
     DataFrame attrs are not automatically included in uploaded table records.
     """
+    # Reuse the shared engine with an empty earthquake input; return only fire rows.
     tables = transform_raw_hazards({"type": "FeatureCollection", "features": []},
                                   raw_data, county_geojson,
                                   start_date=start_date, end_date=end_date)
     assignments = tables.wildfire_counties[["fire_id", "county_fips", "county_name"]]
+    # Left join expands matched fires and keeps one null-county row for unmatched fires.
     result = tables.wildfire_events.merge(assignments, on="fire_id", how="left",
                                          validate="one_to_many")
     for column in ["county_fips", "county_name"]:
@@ -388,6 +432,7 @@ def transform_calfire(raw_data, county_geojson: dict, *, start_date="2016-01-01"
     return result
 
 
+# SECTION 6: Serialization helper used before the caller uploads records to GCS.
 def dataframe_records(frame: pd.DataFrame) -> list[dict]:
     """Return JSON-safe records: string FIPS, list counties, and null missing values.
 
