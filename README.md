@@ -88,8 +88,6 @@ requests.post(f"http://localhost:8000/source/{source}")
 
 ---
 ## Repository Structure
-```
-## Repository Structure
 
 ```
 .
@@ -112,5 +110,4 @@ requests.post(f"http://localhost:8000/source/{source}")
 ├── LICENSE
 ├── README.md
 └── requirements.txt
-```
 ```
