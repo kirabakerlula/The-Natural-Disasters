@@ -1,5 +1,5 @@
 # The-Natural-Disasters
-DSAI-692 Data Acquisitions Group Projet 
+DSAI-692 Data Acquisitions Group Project 
 
 ## Team Members
 
@@ -14,15 +14,17 @@ DSAI-692 Data Acquisitions Group Projet
 
 
 ## Problem Statement
-- The Natural Disasters wants to investigate how demographic factors, such as income and race, can relate to how federal aid is distributed towards communites in california affected by earthquakes and wildfires. 
+- The Natural Disasters wants to investigate how demographic factors, such as income and race, can relate to how federal aid is distributed towards communities in California affected by earthquakes and wildfires. 
 
 ---
 
 ## Data Sources and Integration Goal
 
 ### Sources
-| 1 | [FEMA](https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries) | API | Fema event id, type, name, state, dates, location | Dynamic Updates | Free Key |\
-| 2 | [Cal Fire](https://exact-url) | API | Wildire Data in CA | Dynamic Updates | No Key Needed |\
+| # | Source & Link | Method | What it contains | Update frequency | Access requirements |
+| --- | --- | --- | --- | --- | --- |
+| 1 | [FEMA](https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries) | API | FEMA event id, type, name, state, dates, location | Dynamic Updates | Free Key |\
+| 2 | [Cal Fire](https://exact-url) | API | Wildfire Data in CA | Dynamic Updates | No Key Needed |\
 | 3 | [US Census](https://data.census.gov) | API | Demographic Data | Yearly | Free Key |\
 | 4 | [USGS] (https://earthquake.usgs.gov/earthquakes/search/) | API | Earthquake Data | Dynamic Updates | Free Key, 1000 calls per hour |\
 
@@ -41,83 +43,71 @@ DSAI-692 Data Acquisitions Group Projet
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/ORG/The-Natural-Disasters.git
+git clone https://github.com/kirabakerlula/The-Natural-Disasters.git
 cd The-Natural-Disasters
 ```
 
-### 2. Configure environment variables
-Copy the example file and fill in your own values:
-CENSUS_API_KEY=
-GCS_SERVICE_ACCOUNT_KEY=
-GCS_BUCKET=
-GCP_PROJECT_ID=
-FEMA_URL=
-USGS_EARTHQUAKE_BASE_URL=
-CAL_FIRE_URL= 
+### 2. Create the environment
 
+```bash
+# Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate        # macOS/Linux
+# .venv\Scripts\activate         # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+Copy the example file and fill in your own values,
 ```bash
 cp .env_template .env
 ```
+### Environment variables
 
-| Variable | Description | Example |
+| Variable  | Description | Example |
 | --- | --- | --- |
-| 'CENSUS_API_KEY' | US Census API Key | 'bdjpofj039j.....' |\
-| `GCP_SERVICE_ACCOUNT_KEY` | Absolute path to your service account JSON | `/Users/you/.ssh/key.json` |\
-| `GCS_BUCKET` | Name of your designated GCS bucket | `BUCKET_123` |\
-| `GCP_PROJECT_ID` | Project ID tied to your GCS | `PROJECTID_123` |\
-| `FEMA_URL` | FEMA API key | `df3kj3002......` |\
-| `USGS_EARTHQUAKE_BASE_URL` | USGS Earthquake API Key | `39jr24ooire.....` |\
-| `CAL_FIRE_URL` | Cal Fire API Key | `jowljfe8w90u94.....` |\
+| `CENSUS_API_KEY` | Free US Census API key ([sign up here](https://api.census.gov/data/key_signup.html)) | `your_census_api_key` |
+| `GCS_BUCKET` | Name of the GCS bucket that holds the project datasets | `your-bucket-name` |
+| `GCP_SERVICE_ACCOUNT_KEY` | Path to your GCP service-account JSON key file | `/path/to/service-account-key.json` |
+| `GCP_PROJECT_ID` | ID of the GCP project that contains your bucket | `your-gcp-project-id` |
+| `OPENFEMA_BASE_URL` | OpenFEMA Disaster Declarations endpoint (public, no key needed) | `https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries` |
+| `USGS_EARTHQUAKE_BASE_URL` | USGS earthquake catalog query endpoint (public, no key needed) | `https://earthquake.usgs.gov/fdsnws/event/1/query` |
+| `CAL_FIRE_URL` | Cal Fire incidents endpoint (public, no key needed) | `https://incidents.fire.ca.gov/umbraco/Api/IncidentApi/GetIncidents` |
 
-### 3. How to call your endpoint
+### 4. How to call your endpoint
 To start the API server,
 ```
-fastapi run fastapi/collect_store_data.py
+fastapi run fastapi/main.py
 ```
 
 ```python
-requests.get("http://localhost:8000/source/{source}")
+requests.post(f"http://localhost:8000/source/{source}")
 ```
 
 ---
 ## Repository Structure
+
 ```
 .
-├──demographics
-├── clean_census_data
-├──  hispanic_or_latino_origin_by_race.csv
-├──  median_household_income.csv
-├──  median_sex_by_age.csv
-├──  per_capita_income.csv
-├──  pop_household_income.csv
-├──  poverty_by_sex_age.csv
-├──  race.csv
-├──  sex_by_age.csv
-├── raw_census_data
-├──  B01001.csv
-├──  B01002.csv
-├──  B02001.csv
-├──  B03002.csv
-├──  B17001.csv
-├──  B19001.csv
-├──  B19013.csv
-├──  B19301.csv
-├── census_data_cleaning.py
-├──exploration
-├── fema_data_pull.ipynb
-├──fastapi
-├── call_apis.py
-├── collect_store_data.py
-├── test_upload.ipynb
-├──hazard_data
-├── calfire_sample.py
-├── calfire_wildfires_2016_2026.csv
-├── usgs_california_earthquakes_2016_2026.csv
-├── usgs_sample.py
-├──.gitignore
-├──LICENSE
-├──README.md
-├──.env_template
-├──fema_declarations.py
-└──requirments.txt
+├── demographics/
+│   ├── clean_census_data/
+│   ├── raw_census_data/
+│   └── census_data_cleaning.py
+├── exploration/
+│   └── fema_data_pull.ipynb
+├── fastapi/
+│   ├── call_apis.py
+│   ├── collect_store_data.py
+│   └── test_upload.ipynb
+├── hazard_data/
+│   ├── calfire_sample.py
+│   └── usgs_sample.py
+├── .env_template
+├── .gitignore
+├── fema_declarations.py
+├── LICENSE
+├── README.md
+└── requirements.txt
 ```
