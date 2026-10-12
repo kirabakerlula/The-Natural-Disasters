@@ -1,43 +1,29 @@
-"""FEMA disaster declarations (California): fetch -> save RAW -> clean -> save PROCESSED.
+# Download California FEMA disaster declarations, clean them,
+# save them locally, and upload them to our GCS bucket.
 
-Source: OpenFEMA DisasterDeclarationsSummaries v2 (no API key needed).
-Each row is one *county* (designated area) within a declaration, so a single
-disaster usually produces many rows.
-
-Run directly:  python fema_declarations.py
-Or import:     from fema_declarations import run
-"""
 import json
-import logging
-import time
+import os
 from pathlib import Path
 
 import pandas as pd
 import requests
+from dotenv import load_dotenv
+from google.cloud import storage
 
-logger = logging.getLogger(__name__)
+load_dotenv()  # reads GCS_BUCKET from .env
+BUCKET_NAME = os.environ["GCS_BUCKET"]
 
-BASE_URL = "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries"
-STATE = "CA"
-START_YEAR = 2016
-# Matches our integration goal. Set to None to keep every incident type.
-INCIDENT_TYPES = ["Earthquake", "Fire"]
-PAGE_SIZE = 1000  # OpenFEMA's max records per request
+URL = "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries"
 
-# FEMA lists these reservations with county code "000" (no county).
-# Each one sits inside a real county, so we map them by name.
-TRIBAL_AREA_COUNTY = {
-    "Hopland Rancheria (Indian Reservation)": "06045",      # Mendocino County
-    "Morongo Indian Reservation": "06065",                  # Riverside County
-    "Rohnerville Rancheria (Indian Reservation)": "06023",  # Humboldt County
+# These tribal areas have county code "000" in FEMA's data,
+# so we look up which county each one is in.
+TRIBAL_AREAS = {
+    "Hopland Rancheria (Indian Reservation)": "06045",      # Mendocino
+    "Morongo Indian Reservation": "06065",                  # Riverside
+    "Rohnerville Rancheria (Indian Reservation)": "06023",  # Humboldt
 }
 
-
-
-RAW_DIR = Path("data/raw/fema")
-PROCESSED_DIR = Path("data/processed")
-
-KEEP_COLUMNS = [
+COLUMNS = [
     "id", "femaDeclarationString", "disasterNumber", "state", "declarationType",
     "declarationDate", "incidentType", "declarationTitle",
     "incidentBeginDate", "incidentEndDate",
@@ -46,100 +32,76 @@ KEEP_COLUMNS = [
 ]
 
 
-def fetch_page(skip: int, retries: int = 3) -> list[dict]:
-    """Fetch one page of California declarations. Retries with exponential backoff."""
-    params = {
-        "$filter": f"state eq '{STATE}'",
-        "$top": PAGE_SIZE,
-        "$skip": skip,
-        "$orderby": "id",  # stable order so paging doesn't skip or repeat rows
-    }
-    for attempt in range(1, retries + 1):
-        try:
-            resp = requests.get(BASE_URL, params=params, timeout=60)
-            resp.raise_for_status()
-            return resp.json()["DisasterDeclarationsSummaries"]
-        except (requests.RequestException, KeyError, ValueError) as exc:
-            logger.warning("FEMA skip=%d attempt %d/%d failed: %s", skip, attempt, retries, exc)
-            if attempt == retries:
-                logger.error("Giving up on FEMA skip=%d", skip)
-                raise
-            time.sleep(2 ** attempt)
-
-
-def fetch_all() -> list[dict]:
-    """Page through the API until a short page signals the end."""
-    records, skip = [], 0
+def get_data():
+    # The API gives at most 1000 rows at a time, so keep asking
+    # for the next 1000 until we get fewer than that back.
+    records = []
+    skip = 0
     while True:
-        page = fetch_page(skip)
-        records.extend(page)
-        logger.info("Fetched %d records so far", len(records))
-        if len(page) < PAGE_SIZE:
+        params = {
+            "$filter": "state eq 'CA'",
+            "$top": 1000,
+            "$skip": skip,
+            "$orderby": "id",
+        }
+        response = requests.get(URL, params=params, timeout=60)
+        response.raise_for_status()
+        page = response.json()["DisasterDeclarationsSummaries"]
+        records += page
+        print(f"Got {len(records)} records so far")
+        if len(page) < 1000:
             break
-        skip += PAGE_SIZE
+        skip += 1000
     return records
 
 
-def save_raw(records: list[dict]) -> Path:
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    path = RAW_DIR / "fema_declarations_ca.json"
-    path.write_text(json.dumps(records))
-    logger.info("Saved raw -> %s (%d records)", path, len(records))
-    return path
-
-
-def clean(records: list[dict], start_year: int = START_YEAR) -> pd.DataFrame:
-    df = pd.DataFrame(records)
-    df = df[[c for c in KEEP_COLUMNS if c in df.columns]].copy()
+def clean_data(records):
+    df = pd.DataFrame(records)[COLUMNS]
 
     for col in ["declarationDate", "incidentBeginDate", "incidentEndDate"]:
-        df[col] = pd.to_datetime(df[col], utc=True, errors="coerce")
+        df[col] = pd.to_datetime(df[col], utc=True)
 
+    # Keep fires and earthquakes from 2016 onward
     df = df.drop_duplicates(subset="id")
-    df = df[df["declarationDate"].dt.year >= start_year]
-    if INCIDENT_TYPES:
-        df = df[df["incidentType"].isin(INCIDENT_TYPES)]
+    df = df[df["declarationDate"].dt.year >= 2016]
+    df = df[df["incidentType"].isin(["Fire", "Earthquake"])]
 
-    # 5-digit county FIPS (state 2 + county 3), e.g. "06037" = Los Angeles County.
-    # County code "000" means a tribal area or statewide row, not a real county,
+    # Build a 5-digit county code, e.g. "06" + "037" = "06037" (Los Angeles)
     state = df["fipsStateCode"].astype(str).str.zfill(2)
     county = df["fipsCountyCode"].astype(str).str.zfill(3)
-    df["county_fips"] = (state + county).where(county != "000")
+    df["county_fips"] = state + county
 
- # Rows with county code "000" are tribal areas (or statewide). Flag them,
-    # then fill in the county they sit in so they don't drop out of joins.
-    df["is_tribal_area"] = df["county_fips"].isna()
-    df["county_fips"] = df["county_fips"].fillna(df["designatedArea"].map(TRIBAL_AREA_COUNTY))
+    # County "000" means a tribal area, so swap in the real county
+    df["is_tribal_area"] = county == "000"
+    tribal_counties = df["designatedArea"].map(TRIBAL_AREAS)
+    df.loc[df["is_tribal_area"], "county_fips"] = tribal_counties
 
-    still_missing = df["county_fips"].isna().sum()
-    if still_missing:
-        logger.warning(
-            "%d rows still have no county FIPS: %s",
-            still_missing,
-            df.loc[df["county_fips"].isna(), "designatedArea"].unique().tolist(),
-        )
+    return df.sort_values("declarationDate")
 
 
-    return df.sort_values("declarationDate").reset_index(drop=True)
+def upload(path):
+    bucket = storage.Client().bucket(BUCKET_NAME)
+    bucket.blob(str(path)).upload_from_filename(path)
+    print(f"Uploaded to gs://{BUCKET_NAME}/{path}")
 
 
-def run(start_year: int = START_YEAR) -> pd.DataFrame:
-    records = fetch_all()
-    if not records:
-        raise RuntimeError("No FEMA data collected")
-    save_raw(records)
+def main():
+    records = get_data()
 
-    df = clean(records, start_year)
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    out = PROCESSED_DIR / "fema_declarations_ca_clean.csv"
-    df.to_csv(out, index=False)
-    logger.info("Saved processed -> %s (%d rows)", out, len(df))
-    return df
+    raw_path = Path("data/raw/fema/fema_declarations_ca.json")
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(json.dumps(records))
+    print(f"Saved {len(records)} raw records to {raw_path}")
+
+    df = clean_data(records)
+    clean_path = Path("data/processed/fema_declarations_ca_clean.csv")
+    clean_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(clean_path, index=False)
+    print(f"Saved {len(df)} clean rows to {clean_path}")
+
+    upload(raw_path)
+    upload(clean_path)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-    run()
+    main()
