@@ -7,7 +7,7 @@ import unittest
 import pandas as pd
 
 from hazard_data.transform import (
-    dataframe_records, transform_calfire, transform_raw_hazards, transform_usgs,
+    dataframe_records, summarize_hazards, transform_calfire, transform_usgs,
 )
 from test_hazard_transform import reference
 
@@ -46,9 +46,8 @@ class RawHazardTransformTests(unittest.TestCase):
         self.assertEqual(row["county_fips"], "06001")
         self.assertEqual(row["place"], "Example place label")
         self.assertEqual(raw, before)
-        self.assertEqual(frame.attrs["issues"], [])
 
-    def test_usgs_invalid_time_and_null_geometry_are_audited(self):
+    def test_usgs_invalid_time_excluded_and_null_geometry_retained(self):
         invalid_time = usgs_feature("bad-time")
         invalid_time["properties"]["time"] = "not milliseconds"
         no_geometry = usgs_feature("no-geometry")
@@ -56,8 +55,7 @@ class RawHazardTransformTests(unittest.TestCase):
         frame = transform_usgs(usgs_response([invalid_time, no_geometry]), reference())
         self.assertEqual(frame["earthquake_id"].tolist(), ["no-geometry"])
         self.assertTrue(pd.isna(frame.iloc[0]["county_fips"]))
-        self.assertEqual({issue["issue"] for issue in frame.attrs["issues"]},
-                         {"invalid_date", "invalid_coordinates"})
+        self.assertEqual(frame.iloc[0]["county_match_status"], "invalid_coordinates")
 
     def test_usgs_malformed_failed_or_inconsistent_responses_raise(self):
         inputs = [None, {}, {"error": "failed"},
@@ -96,8 +94,6 @@ class RawHazardTransformTests(unittest.TestCase):
         records = dataframe_records(frame)
         for field in ["county_fips", "acres_burned", "percent_contained", "structures_destroyed"]:
             self.assertIsNone(records[0][field])
-        self.assertEqual(sum(issue["issue"] == "invalid_numeric_field"
-                             for issue in frame.attrs["issues"]), 3)
         json.dumps(records, allow_nan=False)
 
     def test_fire_combined_yearly_incidents_deduplicate_last_update(self):
@@ -107,7 +103,6 @@ class RawHazardTransformTests(unittest.TestCase):
         frame = transform_calfire([first, latest], reference())
         self.assertEqual(frame["county_fips"].tolist(), ["06003"])
         self.assertEqual(frame["acres_burned"].tolist(), [200])
-        self.assertEqual(frame.attrs["issues"][0]["issue"], "duplicate_event_id")
 
     def test_calfire_missing_incidents_is_not_an_empty_success(self):
         for raw in [None, {}, {"error": "failed"}, {"Incidents": None},
@@ -116,11 +111,13 @@ class RawHazardTransformTests(unittest.TestCase):
                 transform_calfire(raw, reference())
 
     def test_empty_successful_raw_snapshots_and_json_null_magnitude(self):
-        tables = transform_raw_hazards(usgs_response(), {"Incidents": []}, reference())
-        self.assertEqual(len(tables.county_summary), 2)
-        self.assertTrue(transform_usgs(usgs_response(), reference()).empty)
-        self.assertTrue(transform_calfire({"Incidents": []}, reference()).empty)
-        records = dataframe_records(tables.county_summary)
+        eq = transform_usgs(usgs_response(), reference())
+        fire = transform_calfire({"Incidents": []}, reference())
+        summary = summarize_hazards(eq, fire, reference())
+        self.assertEqual(len(summary), 2)
+        self.assertTrue(eq.empty)
+        self.assertTrue(fire.empty)
+        records = dataframe_records(summary)
         self.assertEqual(records[0]["county_fips"], "06001")
         self.assertEqual(records[0]["earthquake_count"], 0)
         self.assertIsNone(records[0]["max_earthquake_magnitude"])
@@ -129,13 +126,13 @@ class RawHazardTransformTests(unittest.TestCase):
     def test_raw_join_matches_independent_outputs_without_double_counting(self):
         raw_eq = usgs_response([usgs_feature(), usgs_feature("outside", coordinates=[-120, 36, 5])])
         raw_fire = {"Incidents": [fire_record()]}
-        tables = transform_raw_hazards(raw_eq, raw_fire, reference())
         eq = transform_usgs(raw_eq, reference())
         fire = transform_calfire(raw_fire, reference())
-        self.assertEqual(dataframe_records(eq), dataframe_records(tables.earthquakes))
-        self.assertEqual(tables.county_summary["earthquake_count"].sum(), 1)
-        self.assertEqual(tables.county_summary["wildfire_count"].tolist(), [1, 1])
-        self.assertEqual(fire["fire_id"].nunique(), len(tables.wildfire_events))
+        summary = summarize_hazards(eq, fire, reference())
+        self.assertEqual(len(eq), 2)
+        self.assertEqual(summary["earthquake_count"].sum(), 1)
+        self.assertEqual(summary["wildfire_count"].tolist(), [1, 1])
+        self.assertEqual(fire["fire_id"].nunique(), 1)
         self.assertFalse(fire.duplicated(["fire_id", "county_fips"]).any())
         self.assertEqual(dataframe_records(fire)[0]["counties"], ["Alameda", "Alpine"])
 

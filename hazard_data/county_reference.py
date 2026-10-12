@@ -5,11 +5,15 @@ This reference supplies geographic identifiers, not demographic observations.
 """
 
 import json
+import math
 import os
 import tempfile
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+from shapely.geometry import Point, shape
+from shapely.strtree import STRtree
 
 BOUNDARY_YEAR = 2024
 BOUNDARY_LAYER = (
@@ -68,3 +72,51 @@ def load_county_reference(cache_path: str | Path, *, refresh: bool = False) -> d
         if temporary is not None and temporary.exists():
             temporary.unlink()
     return document
+
+
+def normalize_county_name(value):
+    """Normalize county labels before mapping CAL FIRE names to FIPS."""
+    value = value.strip().casefold().removesuffix(" county, california").removesuffix(" county")
+    return " ".join(value.split())
+
+
+class CountyIndex:
+    """Use names for fire counties and polygon coverage for earthquake epicenters."""
+
+    def __init__(self, geojson):
+        if not isinstance(geojson, dict) or geojson.get("type") != "FeatureCollection":
+            raise ValueError("County reference must be a GeoJSON FeatureCollection")
+        self.counties, self.by_name, polygons = [], {}, []
+        for feature in geojson["features"]:
+            code = str(feature["properties"]["GEOID"])
+            name = feature["properties"]["NAME"].removesuffix(" County")
+            polygon = shape(feature["geometry"])
+            if (len(code) != 5 or not code.isdigit() or not code.startswith("06")
+                    or polygon.is_empty or not polygon.is_valid):
+                raise ValueError("Reference has an invalid FIPS or polygon")
+            key = normalize_county_name(name)
+            if key in self.by_name or any(c["county_fips"] == code for c in self.counties):
+                raise ValueError("Reference has duplicate counties")
+            county = {"county_fips": code, "county_name": name}
+            self.counties.append(county)
+            self.by_name[key] = county
+            polygons.append(polygon)
+        if not polygons:
+            raise ValueError("County reference is empty")
+        self.tree = STRtree(polygons)
+
+    def locate(self, latitude, longitude):
+        """Return a county only when exactly one polygon covers the point."""
+        try:
+            lat, lon = float(latitude), float(longitude)
+        except (TypeError, ValueError):
+            return None, "invalid_coordinates"
+        if not (math.isfinite(lat) and math.isfinite(lon)
+                and -90 <= lat <= 90 and -180 <= lon <= 180 and lat != 0 and lon != 0):
+            return None, "invalid_coordinates"
+        matches = self.tree.query(Point(lon, lat), predicate="covered_by")
+        if len(matches) == 0:
+            return None, "outside_county_boundaries"
+        if len(matches) > 1:
+            return None, "ambiguous_county_boundary"
+        return self.counties[int(matches[0])], "matched"
