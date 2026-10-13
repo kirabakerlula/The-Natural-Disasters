@@ -1,5 +1,5 @@
-# Download California FEMA disaster declarations, clean them,
-# save them locally, and upload them to our GCS bucket.
+# Download California FEMA disaster declarations and FEMA housing aid,
+# clean them, save them locally, and upload them to our GCS bucket.
 
 import json
 import os
@@ -14,6 +14,9 @@ load_dotenv()  # reads GCS_BUCKET from .env
 BUCKET_NAME = os.environ["GCS_BUCKET"]
 
 URL = "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries"
+# Housing aid per disaster, county and zip code, for home owners and renters
+OWNERS_URL = "https://www.fema.gov/api/open/v2/HousingAssistanceOwners"
+RENTERS_URL = "https://www.fema.gov/api/open/v2/HousingAssistanceRenters"
 
 # These tribal areas have county code "000" in FEMA's data,
 # so we look up which county each one is in.
@@ -31,8 +34,14 @@ COLUMNS = [
     "fipsStateCode", "fipsCountyCode", "designatedArea",
 ]
 
+AID_COLUMNS = [
+    "validRegistrations",         # people who applied
+    "approvedForFemaAssistance",  # people who were approved
+    "totalApprovedIhpAmount",     # dollars approved
+]
 
-def get_data():
+
+def get_data(url, key):
     # The API gives at most 1000 rows at a time, so keep asking
     # for the next 1000 until we get fewer than that back.
     records = []
@@ -44,11 +53,11 @@ def get_data():
             "$skip": skip,
             "$orderby": "id",
         }
-        response = requests.get(URL, params=params, timeout=60)
+        response = requests.get(url, params=params, timeout=60)
         response.raise_for_status()
-        page = response.json()["DisasterDeclarationsSummaries"]
+        page = response.json()[key]
         records += page
-        print(f"Got {len(records)} records so far")
+        print(f"{key}: got {len(records)} records so far")
         if len(page) < 1000:
             break
         skip += 1000
@@ -79,6 +88,37 @@ def clean_data(records):
     return df.sort_values("declarationDate")
 
 
+def add_aid(df, owner_records, renter_records):
+    # Owners and renters together, only for the disasters we kept,
+    # added up over zip codes -> one row per disaster + county.
+    aid = pd.concat([pd.DataFrame(owner_records),
+                     pd.DataFrame(renter_records)])
+    aid = aid[aid["disasterNumber"].isin(df["disasterNumber"])]
+    aid = aid.groupby(["disasterNumber", "county"])[AID_COLUMNS].sum()
+    aid = aid.reset_index()
+
+    # Both datasets write counties the same way, e.g. "Butte (County)".
+    # "left" keeps counties that were declared but got no housing aid.
+    df = df.merge(aid, how="left",
+                  left_on=["disasterNumber", "designatedArea"],
+                  right_on=["disasterNumber", "county"])
+    df = df.drop(columns="county")
+    df[AID_COLUMNS] = df[AID_COLUMNS].fillna(0)
+
+    # How each area was treated (blank when nobody applied)
+    df["approval_rate"] = (df["approvedForFemaAssistance"]
+                           / df["validRegistrations"])
+    df["dollars_per_applicant"] = (df["totalApprovedIhpAmount"]
+                                   / df["validRegistrations"])
+    return df
+
+
+def save_json(records, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(records))
+    print(f"Saved {len(records)} raw records to {path}")
+
+
 def upload(path):
     bucket = storage.Client().bucket(BUCKET_NAME)
     bucket.blob(str(path)).upload_from_filename(path)
@@ -86,21 +126,27 @@ def upload(path):
 
 
 def main():
-    records = get_data()
+    records = get_data(URL, "DisasterDeclarationsSummaries")
+    owners = get_data(OWNERS_URL, "HousingAssistanceOwners")
+    renters = get_data(RENTERS_URL, "HousingAssistanceRenters")
 
     raw_path = Path("data/raw/fema/fema_declarations_ca.json")
-    raw_path.parent.mkdir(parents=True, exist_ok=True)
-    raw_path.write_text(json.dumps(records))
-    print(f"Saved {len(records)} raw records to {raw_path}")
+    owners_path = Path("data/raw/fema/housing_assistance_owners_ca.json")
+    renters_path = Path("data/raw/fema/housing_assistance_renters_ca.json")
+    save_json(records, raw_path)
+    save_json(owners, owners_path)
+    save_json(renters, renters_path)
 
     df = clean_data(records)
+    df = add_aid(df, owners, renters)
+
     clean_path = Path("data/processed/fema_declarations_ca_clean.csv")
     clean_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(clean_path, index=False)
     print(f"Saved {len(df)} clean rows to {clean_path}")
 
-    upload(raw_path)
-    upload(clean_path)
+    for path in [raw_path, owners_path, renters_path, clean_path]:
+        upload(path)
 
 
 if __name__ == "__main__":
