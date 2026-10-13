@@ -1,0 +1,95 @@
+{
+  "purpose": "Output examples only; not a collection input.",
+  "source_note": "USGS: saved raw API response. CAL FIRE: previously collected CSV snapshot reconstructed into API-shaped JSON for local validation. No fresh collection was performed.",
+  "analysis_start_date": "2016-01-01",
+  "analysis_end_date": "2026-10-01",
+  "earthquake_preview": [
+    {
+      "earthquake_id": "nc75412157",
+      "date": "2026-08-05",
+      "place": "31 km NNW of Covelo, CA",
+      "magnitude": 4.41,
+      "latitude": 40.0223333333,
+      "longitude": -123.4461666667,
+      "depth": 7.28,
+      "year_month": "2026-08",
+      "county_fips": "06105",
+      "county_name": "Trinity",
+      "county_match_status": "matched"
+    }
+  ],
+  "wildfire_preview": [
+    {
+      "fire_id": "01c86c23-8d70-4c4e-9775-1ca094dfbbc7",
+      "date": "2024-07-20",
+      "name": "Ridge Fire",
+      "location": null,
+      "counties": [
+        "Colusa",
+        "Lake"
+      ],
+      "county_ids": [
+        6,
+        17
+      ],
+      "latitude": 39.0329124,
+      "longitude": -122.457217,
+      "acres_burned": 2756.0,
+      "percent_contained": 100.0,
+      "structures_destroyed": null,
+      "year_month": "2024-07",
+      "county_match_status": "matched",
+      "matched_county_count": 2,
+      "county_fips": "06011",
+      "county_name": "Colusa"
+    },
+    {
+      "fire_id": "01c86c23-8d70-4c4e-9775-1ca094dfbbc7",
+      "date": "2024-07-20",
+      "name": "Ridge Fire",
+      "location": null,
+      "counties": [
+        "Colusa",
+        "Lake"
+      ],
+      "county_ids": [
+        6,
+        17
+      ],
+      "latitude": 39.0329124,
+      "longitude": -122.457217,
+      "acres_burned": 2756.0,
+      "percent_contained": 100.0,
+      "structures_destroyed": null,
+      "year_month": "2024-07",
+      "county_match_status": "matched",
+      "matched_county_count": 2,
+      "county_fips": "06033",
+      "county_name": "Lake"
+    }
+  ],
+  "county_summary_preview": [
+    {
+      "county_fips": "06001",
+      "county_name": "Alameda",
+      "earthquake_count": 2,
+      "max_earthquake_magnitude": 4.38,
+      "wildfire_count": 70
+    },
+    {
+      "county_fips": "06003",
+      "county_name": "Alpine",
+      "earthquake_count": 1,
+      "max_earthquake_magnitude": 4.63,
+      "wildfire_count": 5
+    },
+    {
+      "county_fips": "06037",
+      "county_name": "Los Angeles",
+      "earthquake_count": 11,
+      "max_earthquake_magnitude": 4.7124691938,
+      "wildfire_count": 147
+    }
+  ],
+  "county_summary_total_rows": 58
+}
