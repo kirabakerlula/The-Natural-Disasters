@@ -23,7 +23,7 @@ bucket_name = os.getenv("GCS_BUCKET")
 credentials = service_account.Credentials.from_service_account_file(
     service_account_key)
 
-gcs_raw_folder = "raw/acs/" + ACS_YEAR
+gcs_raw_folder = "acs/raw/" + ACS_YEAR
 
 script_folder = os.path.dirname(os.path.abspath(__file__))
 local_raw_folder = os.path.join(script_folder, "raw_census_data")
