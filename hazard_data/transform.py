@@ -1,8 +1,9 @@
 """Clean raw USGS/CAL FIRE JSON, add county FIPS, and summarize by county.
 
 Call transform_usgs() or transform_calfire() after a successful API request.
-Both return DataFrames. HTTP requests, GCS uploads, and Census joins belong
-to the caller. Unassigned events stay in the output with null county FIPS.
+Both return DataFrames and load county boundaries automatically when omitted.
+Source requests, GCS uploads, and Census joins belong to the caller.
+Unassigned events stay in the output with null county FIPS.
 """
 
 import json
@@ -10,7 +11,9 @@ import math
 
 import pandas as pd
 
-from .county_reference import CountyIndex, normalize_county_name
+from .county_reference import CountyIndex, load_county_reference, normalize_county_name
+
+COUNTY_CACHE_PATH = "data/reference/ca_counties_2024.geojson"
 
 
 def _clean_events(frame, id_column, start_date, end_date):
@@ -48,11 +51,12 @@ def _numbers(series, minimum=None, maximum=None):
     return values.where(valid)
 
 
-def transform_usgs(raw_data, county_geojson, *, start_date="2016-01-01",
+def transform_usgs(raw_data, county_geojson=None, *, start_date="2016-01-01",
                    end_date=None, min_magnitude=4.0):
     """Return one row per earthquake; county is determined by the epicenter.
 
-    Input is a USGS GeoJSON FeatureCollection and the loaded county reference.
+    Input is a USGS GeoJSON FeatureCollection. County boundaries are downloaded
+    and cached when county_geojson is omitted; a preloaded reference also works.
     Invalid IDs/dates/magnitudes are excluded. Unmatched locations remain in
     the output with county_match_status explaining why assignment failed.
     """
@@ -99,6 +103,8 @@ def transform_usgs(raw_data, county_geojson, *, start_date="2016-01-01",
     frame = frame.loc[frame["magnitude"].ge(min_magnitude)].reset_index(drop=True)
 
     # 3. Attach county FIPS; keep offshore, outside, or ambiguous points unassigned.
+    if county_geojson is None:
+        county_geojson = load_county_reference(COUNTY_CACHE_PATH)
     index = CountyIndex(county_geojson)
     assignments = []
     for row in frame.itertuples():
@@ -111,10 +117,11 @@ def transform_usgs(raw_data, county_geojson, *, start_date="2016-01-01",
     return frame
 
 
-def transform_calfire(raw_data, county_geojson, *, start_date="2016-01-01", end_date=None):
+def transform_calfire(raw_data, county_geojson=None, *, start_date="2016-01-01", end_date=None):
     """Return one row per fire/affected county, or one null-county row if unassigned.
 
     Input is an Incidents response or a combined list of yearly incident objects.
+    County boundaries are downloaded and cached when county_geojson is omitted.
     County names determine FIPS; CountyIds are internal identifiers. AcresBurned
     describes the whole event and must not be summed across its county rows.
     """
@@ -141,6 +148,8 @@ def transform_calfire(raw_data, county_geojson, *, start_date="2016-01-01", end_
         frame[column] = _numbers(frame[column], *limits)
 
     # 2. Map affected county names. Deduplicate FIPS within each event.
+    if county_geojson is None:
+        county_geojson = load_county_reference(COUNTY_CACHE_PATH)
     index = CountyIndex(county_geojson)
     rows = []
     for row in frame.to_dict("records"):
@@ -168,12 +177,15 @@ def transform_calfire(raw_data, county_geojson, *, start_date="2016-01-01", end_
     return result
 
 
-def summarize_hazards(earthquakes, wildfires, county_geojson):
+def summarize_hazards(earthquakes, wildfires, county_geojson=None):
     """Summarize the two cleaned outputs into one row per county for a Census join.
 
     Counts use unique event IDs. Unassigned events do not enter county totals.
     Zero means no matched events in the supplied data, not verified absence.
+    County boundaries are downloaded and cached when county_geojson is omitted.
     """
+    if county_geojson is None:
+        county_geojson = load_county_reference(COUNTY_CACHE_PATH)
     summary = pd.DataFrame(CountyIndex(county_geojson).counties).sort_values("county_fips")
     eq = earthquakes.loc[earthquakes["county_fips"].notna()]
     fire = wildfires.loc[wildfires["county_fips"].notna()]
