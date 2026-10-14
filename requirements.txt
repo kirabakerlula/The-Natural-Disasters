@@ -114,6 +114,7 @@ rignore==0.8.1
 rpds-py==2026.6.3
 rsa==4.9.1
 sentry-sdk==2.68.0
+shapely==2.1.2
 shellingham==1.5.4
 six==1.17.0
 smmap==5.0.3
