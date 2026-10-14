@@ -23,7 +23,7 @@ REGION="us-west1"                       # keep the same region everywhere
 API_SERVICE="api-server"                # Cloud Run service name for the API
 WEB_SERVICE="webapp"                    # Cloud Run service name for Streamlit
 
-API_DIR="./fastapi"                     # folder holding the API Dockerfile
+API_DIR="./api"                     # folder holding the API Dockerfile
 WEB_DIR="./streamlit"                   # folder holding the Streamlit Dockerfile
 
 API_PORT=8000                           # must match EXPOSE/CMD in fastapi/

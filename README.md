@@ -79,7 +79,7 @@ cp .env_template .env
 ### 4. How to call your endpoint
 To start the API server,
 ```
-fastapi run fastapi/main.py
+fastapi run api/main.py
 ```
 
 ```python
@@ -97,7 +97,7 @@ requests.post(f"http://localhost:8000/source/{source}")
 │   └── census_data_cleaning.py
 ├── exploration/
 │   └── fema_data_pull.ipynb
-├── fastapi/
+├── api/
 │   ├── call_apis.py
 │   ├── collect_store_data.py
 │   └── test_upload.ipynb
