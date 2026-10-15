@@ -138,3 +138,4 @@ watchdog==6.0.0
 watchfiles==1.2.0
 wcwidth==0.8.2
 websockets==16.1.1
+plotly==5.22.0
