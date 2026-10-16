@@ -53,7 +53,8 @@ def pull_from_gcs(file_name):
 
 # default message
 def default():
-    return {"message": "Please give a source to pull from as a post: source/(earthquake, fire)"}
+    return {"message": "Please give a source to pull from as a post: "
+    "source/(earthquake, fire). You can summarize after calling both posts!"}
 
 # use for getting earthquake data
 def call_earthquake():
