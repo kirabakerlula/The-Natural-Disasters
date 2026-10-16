@@ -1,5 +1,4 @@
-# Download California FEMA disaster declarations and FEMA housing aid,
-# clean them, save them locally, and upload them to our GCS bucket.
+# get the data from fema url, and clean merge and upload to the bucket 
 
 import json
 import os
@@ -19,11 +18,11 @@ OWNERS_URL = "https://www.fema.gov/api/open/v2/HousingAssistanceOwners"
 RENTERS_URL = "https://www.fema.gov/api/open/v2/HousingAssistanceRenters"
 
 # These tribal areas have county code "000" in FEMA's data,
-# so we look up which county each one is in.
+#so we have to match them to a county
 TRIBAL_AREAS = {
-    "Hopland Rancheria (Indian Reservation)": "06045",      # Mendocino
-    "Morongo Indian Reservation": "06065",                  # Riverside
-    "Rohnerville Rancheria (Indian Reservation)": "06023",  # Humboldt
+    "Hopland Rancheria (Indian Reservation)": "06045",
+    "Morongo Indian Reservation": "06065",
+    "Rohnerville Rancheria (Indian Reservation)": "06023",
 }
 
 COLUMNS = [
@@ -35,15 +34,14 @@ COLUMNS = [
 ]
 
 AID_COLUMNS = [
-    "validRegistrations",         # people who applied
-    "approvedForFemaAssistance",  # people who were approved
-    "totalApprovedIhpAmount",     # dollars approved
+    "validRegistrations",
+    "approvedForFemaAssistance",
+    "totalApprovedIhpAmount",
 ]
 
 
 def get_data(url, key):
-    # The API gives at most 1000 rows at a time, so keep asking
-    # for the next 1000 until we get fewer than that back.
+    
     records = []
     skip = 0
     while True:
@@ -74,13 +72,14 @@ def clean_data(records):
     df = df.drop_duplicates(subset="id")
     df = df[df["declarationDate"].dt.year >= 2016]
     df = df[df["incidentType"].isin(["Fire", "Earthquake"])]
-
-    # Build a 5-digit county code, e.g. "06" + "037" = "06037" (Los Angeles)
+    # since state code and countty code are seperate we have to add them manually
+    # 06 + county code = fips
     state = df["fipsStateCode"].astype(str).str.zfill(2)
     county = df["fipsCountyCode"].astype(str).str.zfill(3)
     df["county_fips"] = state + county
 
-    # County "000" means a tribal area, so swap in the real county
+    # County "000 means a tribal area, so swap in the real county
+    # so that we can see tribal areas aswell
     df["is_tribal_area"] = county == "000"
     tribal_counties = df["designatedArea"].map(TRIBAL_AREAS)
     df.loc[df["is_tribal_area"], "county_fips"] = tribal_counties
@@ -89,23 +88,21 @@ def clean_data(records):
 
 
 def add_aid(df, owner_records, renter_records):
-    # Owners and renters together, only for the disasters we kept,
-    # added up over zip codes -> one row per disaster + county.
+    #Owners and renters together, only for the disasters we kept
     aid = pd.concat([pd.DataFrame(owner_records),
                      pd.DataFrame(renter_records)])
     aid = aid[aid["disasterNumber"].isin(df["disasterNumber"])]
     aid = aid.groupby(["disasterNumber", "county"])[AID_COLUMNS].sum()
     aid = aid.reset_index()
 
-    # Both datasets write counties the same way, e.g. "Butte (County)".
-    # "left" keeps counties that were declared but got no housing aid.
+    # Both datasets write counties the same way,  Butte (County)
+    # so we can merge pretty easily 
     df = df.merge(aid, how="left",
                   left_on=["disasterNumber", "designatedArea"],
                   right_on=["disasterNumber", "county"])
     df = df.drop(columns="county")
     df[AID_COLUMNS] = df[AID_COLUMNS].fillna(0)
 
-    # How each area was treated (blank when nobody applied)
     df["approval_rate"] = (df["approvedForFemaAssistance"]
                            / df["validRegistrations"])
     df["dollars_per_applicant"] = (df["totalApprovedIhpAmount"]
@@ -147,7 +144,6 @@ def main():
 
     for path in [raw_path, owners_path, renters_path, clean_path]:
         upload(path)
-
 
 if __name__ == "__main__":
     main()
